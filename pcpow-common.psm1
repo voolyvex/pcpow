@@ -37,7 +37,7 @@ function Initialize-PCPowConfig {
                     action = "Magenta"
                 }
                 excludedProcesses = @(
-                    "explorer", "svchost", "csrss", "smss", "wininit", "winlogon",
+                    "svchost", "csrss", "smss", "wininit", "winlogon",
                     "spoolsv", "lsass", "services", "system", "registry", "idle"
                 )
             }
@@ -79,51 +79,84 @@ function Get-UserApps {
     }
 }
 
-function Close-Apps {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory=$true)]
-        [System.Diagnostics.Process[]]$Processes,
-        [switch]$Force,
-        [string]$ActionType
-    )
+function Close-Applications {
+    param([int]$TimeoutMS = 5000)
+    
+    # Track processes that need force closing
+    [System.Collections.Generic.List[string]]$remainingProcesses = @()
+    $processes = Get-Process | Where-Object {
+        $_.MainWindowHandle -ne 0 -and 
+        $_.ProcessName -notin $script:Config.excludedProcesses
+    } | Sort-Object -Property WorkingSet64 -Descending
+    
+    # Get all PowerShell windows except current
+    $powershellProcesses = Get-Process powershell, pwsh | Where-Object { $_.Id -ne $PID }
+    $processes = @($processes) + @($powershellProcesses)
 
-    $failedProcesses = @()
-    foreach ($proc in $Processes) {
+    # Include explorer.exe for restart/shutdown
+    $explorer = Get-Process explorer -ErrorAction SilentlyContinue
+    if ($explorer) { $processes += $explorer }
+    
+    if ($processes.Count -eq 0) {
+        Write-PCPowLog "No applications to close." -Level Info
+        return $true # No apps to close, consider it successful
+    }
+
+    Write-PCPowLog "Attempting to close $($processes.Count) applications..." -Level Info
+    
+    # Add timeout tracking
+    $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
+    
+    foreach ($process in $processes) {
+        if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMS) {
+            Write-PCPowLog "Timeout reached, proceeding to force close remaining applications." -Level Warning
+            break
+        }
         try {
-            Write-Host "Attempting to close $($proc.Name)..." -ForegroundColor $script:Config.Colors.Info
-            if ($proc.CloseMainWindow()) {
-                if (!$proc.WaitForExit($script:Config.TimeoutMS)) {
-                    if ($Force) {
-                        Write-Host "Force closing $($proc.Name)..." -ForegroundColor $script:Config.Colors.Error
-                        $proc | Stop-Process -Force
-                    } else {
-                        $failedProcesses += $proc.Name
-                    }
+            Write-PCPowLog "Attempting to close $($process.Name) (PID: $($process.Id))..." -Level Info
+            # Request process to close gracefully
+            if ($process.CloseMainWindow()) {
+                Write-PCPowLog "$($process.Name) (PID: $($process.Id)) main window closed, waiting for exit..." -Level Info
+                $process.WaitForExit(($TimeoutMS - $stopwatch.ElapsedMilliseconds))
+                if ($process.HasExited) {
+                    Write-PCPowLog "$($process.Name) (PID: $($process.Id)) closed gracefully." -Level Success
+                    continue # Proceed to next process
                 } else {
-                    Write-Host "$($proc.Name) closed successfully" -ForegroundColor $script:Config.Colors.Success
+                    Write-PCPowLog "$($process.Name) (PID: $($process.Id)) did not exit in time after MainWindowClose." -Level Warning
+                    $remainingProcesses.Add($process.Name)
                 }
             } else {
-                if ($Force) {
-                    Write-Host "Force closing $($proc.Name)..." -ForegroundColor $script:Config.Colors.Error
-                    $proc | Stop-Process -Force
-                } else {
-                    $failedProcesses += $proc.Name
-                }
+                Write-PCPowLog "Failed to send MainWindowClose to $($process.Name) (PID: $($process.Id))." -Level Warning
+                $remainingProcesses.Add($process.Name)
             }
         } catch {
-            Write-Warning "Failed to close $($proc.Name): $_"
-            $failedProcesses += $proc.Name
+            Write-PCPowLog "Error closing $($process.Name): $_" -Level Warning
+            $remainingProcesses.Add($process.Name)
         }
     }
 
-    if ($failedProcesses.Count -gt 0) {
-        Write-Warning "The following applications could not be closed:`n$($failedProcesses -join "`n")"
-        if (-not $Force) {
-            Write-Host "Try running with -Force to override" -ForegroundColor $script:Config.Colors.Warning
+    # Force close remaining processes
+    if ($remainingProcesses.Count -gt 0) {
+        Write-PCPowLog "Force closing $($remainingProcesses.Count) remaining applications..." -Level Warning
+        foreach ($procName in $remainingProcesses) {
+            try {
+                # Use taskkill as a more forceful method
+                Write-PCPowLog "Using taskkill /F to force close $($procName)..." -Level Warning
+                taskkill /F /IM "$procName.exe" /T
+                Write-PCPowLog "taskkill /F for $($procName) completed." -Level Success
+            }
+            catch {
+                Write-PCPowLog "Failed to force close $($procName) using taskkill: $_" -Level Error
+            }
         }
-        return $false
     }
+
+    if ($remainingProcesses.Count -eq 0) {
+        Write-PCPowLog "All applications closed successfully." -Level Success
+    } else {
+        Write-PCPowLog "Warning: Some applications may not have closed cleanly." -Level Warning
+    }
+    
     return $true
 }
 
@@ -158,7 +191,13 @@ function Invoke-PowerAction {
         $userApps = Get-UserApps
         if ($userApps.Count -gt 0) {
             Write-Host "Closing $($userApps.Count) applications..." -ForegroundColor $script:Config.Colors.Info
-            if (-not (Close-Apps -Processes $userApps -Force:$Force -ActionType $Action)) {
+            if (-not (Close-Applications -TimeoutMS $script:Config.TimeoutMS)) {
+                if ($Force) {
+                    Write-PCPowLog "Forcefully terminating remaining applications..." -Level Warning
+                    Get-Process | Where-Object {
+                        $_.Id -in $remainingProcesses.Id
+                    } | Stop-Process -Force
+                }
                 throw "Application closure failed"
             }
         }
@@ -176,14 +215,39 @@ function Invoke-PowerAction {
     }
 }
 
+function Start-PowerOperation {
+    param(
+        [ValidateSet('Sleep','Restart','Shutdown')]
+        [string]$Operation,
+        [switch]$Force
+    )
+    
+    # Register cleanup handler
+    Register-EngineEvent -SourceIdentifier PowerShell.Exiting -Action {
+        Write-Warning "Operation interrupted! System state may be unstable."
+        [System.Environment]::Exit(1)
+    }
+    
+    try {
+        # Existing logic...
+    }
+    catch {
+        Write-Error "Operation failed: $_"
+        exit 2
+    }
+}
+
 # Initialize configuration when module is imported
 Initialize-PCPowConfig
 
 Export-ModuleMember -Function @(
     'Initialize-PCPowConfig',
     'Get-UserApps',
-    'Close-Apps',
+    'Sleep-PC',
+    'Restart-PCApps',
+    'Stop-PCApps',
+    'Close-Applications',
     'Show-ConfirmationPrompt',
     'Invoke-PowerAction',
     'Write-PCPowLog'
-) 
+) -Alias @('pows', 'powr', 'powd') 

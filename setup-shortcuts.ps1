@@ -9,7 +9,7 @@ $scriptPath = [System.IO.Path]::GetFullPath($scriptPath)
 $moduleName = "pcpow-common"
 $moduleVersion = "1.0.0"
 # Use PowerShell's built-in module path
-$userModulePath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "WindowsPowerShell\Modules\$moduleName\$moduleVersion"
+$userModulePath = Join-Path ([Environment]::GetFolderPath('MyDocuments')) "WindowsPowerShell\Modules\pcpow-common\$moduleVersion"
 
 Write-Host "Creating module directory: $userModulePath"
 if (-not (Test-Path $userModulePath)) {
@@ -120,8 +120,14 @@ Add-Content -Path $PROFILE -Value $moduleConfig
 # Test the commands
 Write-Host "`nTesting command availability..."
 $testScript = @"
-Import-Module $moduleName -Force
-Get-Command -Name Sleep-PC, Restart-PCApps, Stop-PCApps, pows, powr, powd -ErrorAction SilentlyContinue
+`$ErrorActionPreference = 'Stop'
+try {
+    Import-Module $moduleName -Force
+    `$commands = Get-Command -Name Sleep-PC, Restart-PCApps, Stop-PCApps, pows, powr, powd -ErrorAction Stop
+    Write-Host "Commands available: `$(`$commands.Name -join ', ')" -ForegroundColor Green
+} catch {
+    Write-Warning "Some commands not found. Error: `$_"
+}
 "@
 
 $result = powershell -NoProfile -Command $testScript
@@ -265,5 +271,26 @@ if (-not ($paths -contains $shortcutsDir)) {
         "Path",
         $env:Path,
         [System.EnvironmentVariableTarget]::User
+    )
+}
+
+# Add the module path to PSModulePath if not already present
+$modulePath = Split-Path -Parent $userModulePath
+if (-not ($env:PSModulePath -split ';' -contains $modulePath)) {
+    [Environment]::SetEnvironmentVariable(
+        "PSModulePath",
+        "$env:PSModulePath;$modulePath",
+        [System.EnvironmentVariableTarget]::User
+    )
+}
+
+# Add WindowsApps to PATH if not present
+$windowsAppsPath = Join-Path $env:USERPROFILE "AppData\Local\Microsoft\WindowsApps"
+$currentPath = [Environment]::GetEnvironmentVariable("PATH", [EnvironmentVariableTarget]::User)
+if ($currentPath -notlike "*$windowsAppsPath*") {
+    [Environment]::SetEnvironmentVariable(
+        "PATH",
+        "$currentPath;$windowsAppsPath",
+        [EnvironmentVariableTarget]::User
     )
 } 

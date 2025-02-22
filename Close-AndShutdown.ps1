@@ -38,31 +38,28 @@ try {
     exit 1
 }
 
+# Add check for admin context
+if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    Write-Warning "Operation requires administrator privileges"
+    exit 1
+}
+
+# Add terminal warning
+Write-Host "This will close all applications and shut down the computer!" -ForegroundColor Red
+Write-Host "Keep this window open until the operation completes." -ForegroundColor Yellow
+
 try {
-    if (-not $Force) {
-        if (-not (Show-ConfirmationPrompt -ActionType "shutdown")) {
-            Write-PCPowLog "Operation cancelled by user." -Level Warning
-            exit 0
-        }
+    $confirmMessage = "Are you sure you want to shutdown the computer? This will close all applications."
+    if ($Force -or $host.UI.PromptForChoice("Confirm Shutdown", $confirmMessage, @("&Yes", "&No"), 1) -eq 0) {
+        # Close all applications gracefully
+        Get-Process | Where-Object { $_.MainWindowTitle -ne "" } | Stop-Process -Force
+
+        # Wait a moment for processes to close
+        Start-Sleep -Seconds 2
+
+        # Shutdown computer
+        Stop-Computer -Force
     }
-
-    Write-PCPowLog "Identifying running applications..." -Level Info
-    $userApps = Get-UserApps
-
-    if ($userApps.Count -eq 0) {
-        Write-PCPowLog "No user applications found to close." -Level Success
-    } else {
-        Write-PCPowLog "Found $($userApps.Count) applications to close." -Level Info
-        if (-not (Close-Apps -Processes $userApps -Force:$Force -ActionType "shutdown")) {
-            throw "Failed to close all applications"
-        }
-    }
-
-    Write-PCPowLog "Waiting for processes to finish closing..." -Level Info
-    Start-Sleep -Seconds 2
-
-    Write-PCPowLog "Shutting down PC..." -Level Action
-    Invoke-PowerAction -Action Shutdown -Force:$Force
 }
 catch {
     Write-PCPowLog "Error: $_" -Level Error

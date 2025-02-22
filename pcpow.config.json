@@ -8,6 +8,7 @@
         "info": "Cyan",
         "action": "Magenta"
     },
+    "defaultForce": true,
     "excludedProcesses": [
         "explorer", "svchost", "csrss", "smss", "wininit", "winlogon",
         "spoolsv", "lsass", "services", "system", "registry", "idle",

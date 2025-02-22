@@ -38,114 +38,24 @@ try {
     exit 1
 }
 
-function Show-ConfirmationPrompt {
-    param (
-        [string]$ActionType
-    )
-
-    $title = "Confirm $ActionType"
-    $message = "WARNING: This will close all running programs and $ActionType.`nSave any important work before continuing.`nProceed?"
-    
-    $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Confirm $ActionType"
-    $no = New-Object System.Management.Automation.Host.ChoiceDescription "&No", "Cancel operation"
-    $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
-    
-    $result = $host.ui.PromptForChoice($title, $message, $options, 1)
-    return $result -eq 0
-}
-
-function Get-UserApps {
-    $excludedProcesses = @(
-        "explorer", "svchost", "csrss", "smss", "wininit", "winlogon",
-        "spoolsv", "lsass", "services", "system", "registry", "idle",
-        "dwm", "RuntimeBroker", "ShellExperienceHost", "SearchHost",
-        "StartMenuExperienceHost", "Taskmgr", "sihost", "fontdrvhost",
-        "powershell", "conhost", "WmiPrvSE", "dllhost", "ctfmon",
-        "SecurityHealthService", "SearchIndexer", "Memory Compression"
-    )
-    
-    $processes = Get-Process | Where-Object {
-        $_.SessionId -eq (Get-Process -PID $PID).SessionId -and
-        $_.Name -notin $excludedProcesses -and
-        $_.MainWindowHandle -ne 0
-    }
-    
-    return $processes
-}
-
-function Close-Apps {
-    param (
-        [Parameter(Mandatory=$true)]
-        [System.Diagnostics.Process[]]$Processes,
-        [switch]$Force,
-        [string]$ActionType
-    )
-    
-    $failedProcesses = @()
-    foreach ($proc in $Processes) {
-        try {
-            Write-Host "Attempting to close $($proc.Name)..." -ForegroundColor Yellow
-            if ($proc.CloseMainWindow()) {
-                # Wait up to 5 seconds for the process to close gracefully
-                if (!$proc.WaitForExit(5000)) {
-                    if ($Force) {
-                        Write-Host "Force closing $($proc.Name)..." -ForegroundColor Red
-                        $proc | Stop-Process -Force
-                    } else {
-                        $failedProcesses += $proc.Name
-                    }
-                } else {
-                    Write-Host "$($proc.Name) closed successfully" -ForegroundColor Green
-                }
-            } else {
-                if ($Force) {
-                    Write-Host "Force closing $($proc.Name)..." -ForegroundColor Red
-                    $proc | Stop-Process -Force
-                } else {
-                    $failedProcesses += $proc.Name
-                }
-            }
-        } catch {
-            Write-Warning "Failed to close $($proc.Name): $_"
-            $failedProcesses += $proc.Name
-        }
-    }
-    
-    if ($failedProcesses.Count -gt 0) {
-        Write-Warning "The following applications could not be closed:`n$($failedProcesses -join "`n")"
-        if (-not $Force) {
-            Write-Host "Try running the script with -Force to forcefully close applications" -ForegroundColor Yellow
-        }
-    }
-}
-
 try {
-    if (-not $Force) {
-        if (-not (Show-ConfirmationPrompt -ActionType "restart")) {
-            Write-PCPowLog "Operation cancelled by user." -Level Warning
-            exit 0
-        }
+    $confirmMessage = "Are you sure you want to restart the computer? This will close all applications."
+    if ($Force -or $host.UI.PromptForChoice("Confirm Restart", $confirmMessage, @("&Yes", "&No"), 1) -eq 0) {
+        # Close all applications gracefully
+        Get-Process | Where-Object { $_.MainWindowTitle -ne "" } | Stop-Process -Force
+
+        # Wait a moment for processes to close
+        Start-Sleep -Seconds 2
+
+        # Restart computer
+        Restart-Computer -Force
     }
-
-    Write-PCPowLog "Identifying running applications..." -Level Info
-    $userApps = Get-UserApps
-
-    if ($userApps.Count -eq 0) {
-        Write-PCPowLog "No user applications found to close." -Level Success
-    } else {
-        Write-PCPowLog "Found $($userApps.Count) applications to close." -Level Info
-        if (-not (Close-Apps -Processes $userApps -Force:$Force -ActionType "restart")) {
-            throw "Failed to close all applications"
-        }
-    }
-
-    Write-PCPowLog "Waiting for processes to finish closing..." -Level Info
-    Start-Sleep -Seconds 2
-
-    Write-PCPowLog "Restarting PC..." -Level Action
-    Invoke-PowerAction -Action Restart -Force:$Force
 }
 catch {
     Write-PCPowLog "Error: $_" -Level Error
     exit 1
-} 
+}
+
+# Ensure restart happens even if there are errors
+Write-Host "Forcing immediate restart..." -ForegroundColor Red
+shutdown.exe /r /f /t 0 

@@ -1,6 +1,9 @@
 @echo off
 setlocal enabledelayedexpansion
 
+REM Get the directory where the batch file is located
+set "PCPOW_DIR=%~dp0"
+
 if "%~1"=="" goto :help
 if /i "%~1"=="sleep" goto :sleep
 if /i "%~1"=="restart" goto :restart
@@ -13,15 +16,15 @@ echo.
 goto :help
 
 :sleep
-powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndSleep.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndSleep.ps1" %2
 exit /b %errorlevel%
 
 :restart
-powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndRestart.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndRestart.ps1" %2
 exit /b %errorlevel%
 
 :shutdown
-powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndShutdown.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndShutdown.ps1" %2
 exit /b %errorlevel%
 
 :help

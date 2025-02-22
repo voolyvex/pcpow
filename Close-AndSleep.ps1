@@ -39,30 +39,13 @@ try {
 }
 
 try {
-    if (-not $Force) {
-        if (-not (Show-ConfirmationPrompt -ActionType "sleep")) {
-            Write-PCPowLog "Operation cancelled by user." -Level Warning
-            exit 0
+    if ($Force -or (Show-ConfirmationPrompt -ActionType "Sleep")) {
+        Write-PCPowLog "Initiating sleep sequence..." -Level Action
+        if (Close-Applications -TimeoutMS $script:Config.TimeoutMS) {
+            Add-Type -AssemblyName System.Windows.Forms
+            [System.Windows.Forms.Application]::SetSuspendState("Suspend", $false, $false)
         }
     }
-
-    Write-PCPowLog "Identifying running applications..." -Level Info
-    $userApps = Get-UserApps
-
-    if ($userApps.Count -eq 0) {
-        Write-PCPowLog "No user applications found to close." -Level Success
-    } else {
-        Write-PCPowLog "Found $($userApps.Count) applications to close." -Level Info
-        if (-not (Close-Apps -Processes $userApps -Force:$Force -ActionType "sleep")) {
-            throw "Failed to close all applications"
-        }
-    }
-
-    Write-PCPowLog "Waiting for processes to finish closing..." -Level Info
-    Start-Sleep -Seconds 2
-
-    Write-PCPowLog "Putting PC to sleep..." -Level Action
-    Invoke-PowerAction -Action Sleep -Force:$Force
 }
 catch {
     Write-PCPowLog "Error: $_" -Level Error
