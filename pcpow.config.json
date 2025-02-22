@@ -1,0 +1,19 @@
+{
+    "version": "1.0.0",
+    "timeoutMS": 5000,
+    "colors": {
+        "warning": "Yellow",
+        "success": "Green",
+        "error": "Red",
+        "info": "Cyan",
+        "action": "Magenta"
+    },
+    "excludedProcesses": [
+        "explorer", "svchost", "csrss", "smss", "wininit", "winlogon",
+        "spoolsv", "lsass", "services", "system", "registry", "idle",
+        "dwm", "RuntimeBroker", "ShellExperienceHost", "SearchHost",
+        "StartMenuExperienceHost", "Taskmgr", "sihost", "fontdrvhost",
+        "powershell", "conhost", "WmiPrvSE", "dllhost", "ctfmon",
+        "SecurityHealthService", "SearchIndexer", "Memory Compression"
+    ]
+} 
