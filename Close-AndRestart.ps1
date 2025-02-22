@@ -29,7 +29,14 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-Import-Module $PSScriptRoot\pcpow-common.psm1 -Force
+
+# Import the module by name (it should be in the PSModulePath)
+try {
+    Import-Module pcpow-common -MinimumVersion 1.0.0 -Force -ErrorAction Stop
+} catch {
+    Write-Error "Failed to import PCPow module. Please ensure it is installed correctly: $_"
+    exit 1
+}
 
 function Show-ConfirmationPrompt {
     param (

@@ -1,23 +1,28 @@
 @echo off
+setlocal enabledelayedexpansion
+
 if "%~1"=="" goto :help
 if /i "%~1"=="sleep" goto :sleep
 if /i "%~1"=="restart" goto :restart
 if /i "%~1"=="shutdown" goto :shutdown
 if /i "%~1"=="-h" goto :help
 if /i "%~1"=="--help" goto :help
+
+echo Error: Unknown command '%~1'
+echo.
 goto :help
 
 :sleep
 powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndSleep.ps1" %2
-goto :eof
+exit /b %errorlevel%
 
 :restart
 powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndRestart.ps1" %2
-goto :eof
+exit /b %errorlevel%
 
 :shutdown
 powershell -ExecutionPolicy Bypass -File "%~dp0Close-AndShutdown.ps1" %2
-goto :eof
+exit /b %errorlevel%
 
 :help
 echo PCPow - Windows Power Management
@@ -35,4 +40,5 @@ echo.
 echo Examples:
 echo   pcpow sleep
 echo   pcpow restart -Force
-echo   pcpow shutdown 
+echo   pcpow shutdown
+exit /b 0 
