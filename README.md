@@ -1,112 +1,49 @@
-# PCPow - Windows Power Management Scripts
+# PCPow - Windows Power Management
 
-Robust PowerShell scripts for gracefully closing applications before sleep, restart, or shutdown on Windows 10/11.
+## Safely sleep/restart/shutdown Windows with open app cleanup
 
-## Features
+**Key Features**:
+- Closes user applications before power actions
+- Preserves system processes and services
+- Configurable timeouts and process whitelist
+- Works from PowerShell or Run dialog (Win+R)
 
-- 🔒 Safely closes running applications
-- 💤 Three power actions: sleep, restart, shutdown
-- ⚡ Quick commands from terminal or Run menu
-- 🛡️ Preserves system processes
-- ⚙️ Force mode for unresponsive apps
+## Quick Install
+```powershell
+# Run in Admin PowerShell
+irm https://raw.githubusercontent.com/voolyvex/pcpow/main/setup-shortcuts.ps1 -OutFile setup.ps1
+.\setup.ps1
+```
 
-## 🆕 Version 2.0 Features
-- Centralized configuration via JSON
-- Enhanced color-coded status messages
-- Configurable timeout settings
-- Detailed error reporting and logging
-- Consistent behavior across all power actions
-- Improved process exclusion list
-- PowerShell 5.1+ module structure
-- Better error handling and recovery
+## Basic Usage
+```bash
+# Command Prompt/Run dialog:
+pcpow sleep       # Close apps and sleep
+pcpow restart -F  # Force restart without confirmation
 
-## Configuration
-Create or modify `pcpow.config.json` to customize behavior:
+# PowerShell:
+pows              # Alias for Sleep-PC
+powr -Force       # Force restart apps
+Stop-PCApps       # Full shutdown command
+```
+
+## Configuration (optional)
+Create `pcpow.config.json` to customize:
 ```json
 {
-    "version": "1.0.0",
     "timeoutMS": 5000,
-    "colors": {
-        "warning": "Yellow",
-        "success": "Green",
-        "error": "Red",
-        "info": "Cyan",
-        "action": "Magenta"
-    },
     "excludedProcesses": [
-        "explorer", "svchost", "csrss", "smss",
-        "wininit", "winlogon", "spoolsv", "lsass"
+        "explorer", "backgroundsvc",
+        "securityprocess", "antivirus"
     ]
 }
 ```
 
-## Requirements
-
-- Windows 10/11
-- PowerShell 5.1 or later
-- Administrator privileges for setup
-
-## Installation
-
-1. Clone the repository
-2. Run PowerShell as Administrator
-3. Execute setup script:
-```powershell
-.\setup-shortcuts.ps1
-```
-
-## Usage
-
-### Command Prompt or Run Menu (Win+R):
-```batch
-pcpow sleep
-pcpow restart
-pcpow shutdown
-```
-
-### PowerShell Quick Commands:
-```powershell
-pow sleep   # or pows
-pow restart # or powr
-pow shutdown # or powd
-```
-
-Add `-Force` to skip confirmation and force close apps:
-```powershell
-pow sleep -Force  # Force sleep mode
-```
-
-## Files
-
-- `pcpow-common.psm1` - Core PowerShell module
-- `pcpow.config.json` - Configuration file
-- `Close-And*.ps1` - Power action scripts
-- `pcpow.bat` - Command-line interface
-- `setup-shortcuts.ps1` - Installation script
-
-## Safety Features
-
-- Confirmation prompts before actions
-- Graceful application closing with configurable timeout
-- System process protection via exclusion list
-- Comprehensive error handling and logging
-- Configurable timeouts for graceful exits
-
-## Error Handling
-
-- Detailed error messages with color coding
-- Safe fallbacks for missing configuration
-- Proper exit codes for automation
-- Graceful recovery from application close failures
+## Safety
+- Confirms destructive actions unless using `-Force`
+- Gives apps 5s to close gracefully (configurable)
+- Protects critical system processes
+- Logs errors to Windows Event Viewer
 
 ## License
-
-MIT License - Feel free to modify and distribute
-
-## Contributing
-
-Pull requests welcome! Please ensure your changes:
-- Follow PowerShell best practices
-- Include proper error handling
-- Update documentation as needed
-- Maintain backward compatibility 
+MIT - Free for personal/professional use 
