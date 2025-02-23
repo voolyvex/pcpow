@@ -75,12 +75,23 @@ function Write-PCPowLog {
     param(
         [Parameter(Mandatory=$true)]
         [string]$Message,
-        [ValidateSet('Info','Success','Warning','Error','Action')]
+        [ValidateSet('Info','Success','Warning','Error','Action','Debug')]
         [string]$Level = 'Info'
     )
     
-    $color = $script:Config.colors."$($Level.ToLower())"
-    Write-Host $Message -ForegroundColor $color
+    try {
+        # Default to Info color if not found
+        $color = if ($script:Config.colors.ContainsKey($Level.ToLower())) {
+            $script:Config.colors.$($Level.ToLower())
+        } else {
+            $script:Config.colors.info
+        }
+        Write-Host $Message -ForegroundColor $color
+    }
+    catch {
+        # Fallback to basic output if something goes wrong
+        Write-Host $Message
+    }
 }
 
 function Get-UserApps {
@@ -165,7 +176,7 @@ function Close-Applications {
                     }
                 }
                 Start-Sleep -Milliseconds 500
-                Start-Process explorer
+                # Don't restart Explorer here - it will be handled by Windows
             }
             catch { }
         }
@@ -308,7 +319,7 @@ function Invoke-PowerAction {
     )
 
     try {
-        Write-Host "Initiating $Action sequence..." -ForegroundColor $script:Config.Colors.Action
+        Write-PCPowLog "Initiating $Action sequence..." -Level Action
         
         # Check confirmation first
         if (-not $Force -and -not $script:Config.AlwaysForce) {
@@ -325,37 +336,144 @@ function Invoke-PowerAction {
         $timeout = if ($useForce) { 3000 } else { $script:Config.TimeoutMS }
         
         # Close applications with optimized parameters
-        if (-not (Close-Applications -TimeoutMS $timeout -NoGraceful $script:Config.NoGraceful)) {
+        if (-not (Close-Applications -TimeoutMS $timeout -NoGraceful:$script:Config.NoGraceful)) {
             if (-not $useForce) {
                 throw "Some applications could not be closed cleanly"
             }
         }
 
-        Write-Host "Performing $Action..." -ForegroundColor $script:Config.Colors.Action
+        Write-PCPowLog "Performing $Action..." -Level Action
+        
+        # Ensure we're not in a nested PowerShell session
+        $isNested = [bool]$PSCommandPath
+
         switch ($Action) {
             'Restart' { 
-                if ($useForce) {
-                    shutdown /r /f /t 0
-                } else {
-                    Restart-Computer -Force:$useForce
+                try {
+                    if ($useForce) {
+                        Write-PCPowLog "Forcing restart..." -Level Warning
+                        try {
+                            if ($isNested) {
+                                & shutdown.exe /r /f /t 0
+                            } else {
+                                Start-Process "shutdown.exe" -ArgumentList "/r /f /t 0" -NoNewWindow
+                            }
+                        } catch {
+                            # Fallback to Restart-Computer if shutdown.exe fails
+                            Restart-Computer -Force -ErrorAction Stop
+                        }
+                    } else {
+                        Write-PCPowLog "Initiating graceful restart..." -Level Info
+                        try {
+                            if ($isNested) {
+                                & shutdown.exe /r /t 10
+                            } else {
+                                Start-Process "shutdown.exe" -ArgumentList "/r /t 10" -NoNewWindow
+                            }
+                        } catch {
+                            # Fallback to Restart-Computer if shutdown.exe fails
+                            Restart-Computer -ErrorAction Stop
+                        }
+                    }
+                    
+                    # Give the restart command time to take effect
+                    Start-Sleep -Seconds 2
+                }
+                catch {
+                    Write-PCPowLog "Failed to initiate restart: $_" -Level Error
+                    throw
                 }
             }
             'Shutdown' { 
-                if ($useForce) {
-                    shutdown /s /f /t 0
-                } else {
-                    Stop-Computer -Force:$useForce
+                try {
+                    if ($useForce) {
+                        Write-PCPowLog "Forcing shutdown..." -Level Warning
+                        # Try multiple methods for reliability
+                        try {
+                            if ($isNested) {
+                                & shutdown.exe /s /f /t 0
+                            } else {
+                                Start-Process "shutdown.exe" -ArgumentList "/s /f /t 0" -NoNewWindow
+                            }
+                        } catch {
+                            # Fallback to Stop-Computer if shutdown.exe fails
+                            Stop-Computer -Force -ErrorAction Stop
+                        }
+                    } else {
+                        Write-PCPowLog "Initiating graceful shutdown..." -Level Info
+                        # Give apps a bit more time to close in graceful mode
+                        try {
+                            if ($isNested) {
+                                & shutdown.exe /s /t 10
+                            } else {
+                                Start-Process "shutdown.exe" -ArgumentList "/s /t 10" -NoNewWindow
+                            }
+                        } catch {
+                            # Fallback to Stop-Computer if shutdown.exe fails
+                            Stop-Computer -ErrorAction Stop
+                        }
+                    }
+                    
+                    # Give the shutdown command time to take effect
+                    Start-Sleep -Seconds 2
+                }
+                catch {
+                    Write-PCPowLog "Failed to initiate shutdown: $_" -Level Error
+                    throw
                 }
             }
             'Sleep' { 
-                Add-Type -AssemblyName System.Windows.Forms
-                [System.Windows.Forms.Application]::SetSuspendState("Suspend", $useForce, $false)
+                try {
+                    Write-PCPowLog "Preparing system for sleep..." -Level Info
+                    Add-Type -AssemblyName System.Windows.Forms
+                    
+                    # Try to prevent system from waking up immediately
+                    $preventWakeHandle = $null
+                    try {
+                        $preventWakeHandle = [System.Threading.Mutex]::new($true, "PCPowPreventWake")
+                    } catch { }
+                    
+                    # Ensure Windows knows we're initiating sleep
+                    $null = Add-Type -TypeDefinition @"
+                        using System;
+                        using System.Runtime.InteropServices;
+                        public class PCPowSleep {
+                            [DllImport("powrprof.dll", CharSet = CharSet.Auto, ExactSpelling = true)]
+                            public static extern bool SetSuspendState(bool hibernate, bool forceCritical, bool disableWakeEvent);
+                        }
+"@
+                    
+                    Write-PCPowLog "Initiating sleep mode..." -Level Action
+                    if ($useForce) {
+                        # Force sleep using both methods for reliability
+                        try { [PCPowSleep]::SetSuspendState($false, $true, $true) } catch {
+                            [System.Windows.Forms.Application]::SetSuspendState("Suspend", $true, $false)
+                        }
+                    } else {
+                        # Graceful sleep
+                        try { [PCPowSleep]::SetSuspendState($false, $false, $false) } catch {
+                            [System.Windows.Forms.Application]::SetSuspendState("Suspend", $false, $false)
+                        }
+                    }
+                    
+                    # Give system time to initiate sleep
+                    Start-Sleep -Seconds 2
+                    
+                    if ($preventWakeHandle) {
+                        $preventWakeHandle.ReleaseMutex()
+                        $preventWakeHandle.Dispose()
+                    }
+                }
+                catch {
+                    Write-PCPowLog "Failed to initiate sleep: $_" -Level Error
+                    throw
+                }
             }
         }
     }
     catch {
-        Write-Host "Error during $Action operation: $_" -ForegroundColor $script:Config.Colors.Error
-        exit 1
+        Write-PCPowLog "Error during $Action operation: $_" -Level Error
+        throw
     }
 }
 
@@ -384,6 +502,12 @@ function Start-PowerOperation {
 # Initialize configuration when module is imported
 Initialize-PCPowConfig
 
+# Define the functions for the aliases
+function Sleep-PC { param([switch]$Force) Invoke-PowerAction -Action Sleep -Force:$Force }
+function Restart-PCApps { param([switch]$Force) Invoke-PowerAction -Action Restart -Force:$Force }
+function Stop-PCApps { param([switch]$Force) Invoke-PowerAction -Action Shutdown -Force:$Force }
+
+# Export module members
 Export-ModuleMember -Function @(
     'Initialize-PCPowConfig',
     'Get-UserApps',
@@ -394,4 +518,9 @@ Export-ModuleMember -Function @(
     'Show-ConfirmationPrompt',
     'Invoke-PowerAction',
     'Write-PCPowLog'
-) -Alias @('pows', 'powr', 'powd') 
+) -Alias @('pows', 'powr', 'powd')
+
+# Set up aliases
+New-Alias -Name pows -Value Sleep-PC -Force
+New-Alias -Name powr -Value Restart-PCApps -Force
+New-Alias -Name powd -Value Stop-PCApps -Force 
