@@ -58,8 +58,26 @@ if (-not (Test-Path $manifestPath)) {
 
 # Copy script files
 Write-Host "Copying script files..."
+Write-Host "Copying pcpow.bat to $shortcutsDir"
 Copy-Item "$scriptPath\pcpow.bat" $shortcutsDir -Force
-Copy-Item "$scriptPath\Close-And*.ps1" $shortcutsDir -Force
+if (-not (Test-Path "$shortcutsDir\pcpow.bat")) {
+    throw "Failed to copy pcpow.bat to $shortcutsDir"
+}
+
+Write-Host "Copying PowerShell scripts..."
+foreach ($script in @("Close-AndSleep.ps1", "Close-AndRestart.ps1", "Close-AndShutdown.ps1")) {
+    Write-Host "  Copying $script"
+    Copy-Item "$scriptPath\$script" $shortcutsDir -Force
+    if (-not (Test-Path "$shortcutsDir\$script")) {
+        throw "Failed to copy $script to $shortcutsDir"
+    }
+}
+
+# Verify the copied batch file is correct
+$batchContent = Get-Content "$shortcutsDir\pcpow.bat" -Raw
+if (-not $batchContent.Contains("Start-PCSleep")) {
+    Write-Warning "pcpow.bat may not be up to date. Please verify the help text is current."
+}
 
 # Create PowerShell profile directory if it doesn't exist
 $profileDir = Split-Path -Parent $PROFILE
@@ -220,9 +238,18 @@ if ($restart -eq 'Y' -or $restart -eq 'y') {
 # Add these verification steps before the final message
 Write-Host "Verifying installation..."
 
-# Verify batch file
+# Verify files and content
+Write-Host "Checking installed files..."
+$verificationErrors = @()
+
+# Verify batch file and its content
 if (-not (Test-Path "$shortcutsDir\pcpow.bat")) {
-    Write-Warning "pcpow.bat not found in $shortcutsDir"
+    $verificationErrors += "pcpow.bat not found in $shortcutsDir"
+} else {
+    $batchContent = Get-Content "$shortcutsDir\pcpow.bat" -Raw
+    if (-not $batchContent.Contains("Start-PCSleep")) {
+        $verificationErrors += "pcpow.bat help text is outdated"
+    }
 }
 
 # Verify PowerShell scripts
@@ -234,13 +261,13 @@ $requiredScripts = @(
 
 foreach ($script in $requiredScripts) {
     if (-not (Test-Path "$shortcutsDir\$script")) {
-        Write-Warning "$script not found in $shortcutsDir"
+        $verificationErrors += "$script not found in $shortcutsDir"
     }
 }
 
 # Verify module installation
 if (-not (Get-Module -ListAvailable -Name pcpow-common)) {
-    Write-Warning "pcpow-common module not found in PowerShell modules"
+    $verificationErrors += "pcpow-common module not found in PowerShell modules"
 }
 
 # Test PATH environment
@@ -275,4 +302,15 @@ if ($currentPath -notlike "*$windowsAppsPath*") {
         "$currentPath;$windowsAppsPath",
         [EnvironmentVariableTarget]::User
     )
+}
+
+# Report verification results
+if ($verificationErrors.Count -gt 0) {
+    Write-Warning "Installation verification found issues:"
+    foreach ($error in $verificationErrors) {
+        Write-Warning "  - $error"
+    }
+    Write-Warning "Please run the setup script again or check the documentation for troubleshooting."
+} else {
+    Write-Host "Installation verified successfully!" -ForegroundColor Green
 } 
