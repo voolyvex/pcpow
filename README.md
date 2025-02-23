@@ -2,33 +2,44 @@
 
 Simple Windows power management tool that safely closes apps before sleep/restart/shutdown.
 
-## Usage
+## Quick Start
 
-```bash
-pcpow sleep     # Put PC to sleep
+1. Run `setup-shortcuts.ps1` as administrator
+2. Restart PowerShell
+3. Use any of these commands:
+
+From Command Prompt or Run (Win+R):
+```
+pcpow sleep     # Sleep PC
 pcpow restart   # Restart PC
 pcpow shutdown  # Shutdown PC
-pcpow -h        # Show help
 ```
 
-Add `-Force` to skip confirmation prompts:
-```bash
+From PowerShell:
+```powershell
+pows    # Sleep
+powr    # Restart
+powd    # Shutdown
+```
+
+## Options
+
+Add `-Force` to skip confirmations:
+```
 pcpow sleep -Force
 ```
 
-## Features
+## Configuration
 
-- Safely closes applications before power actions
-- Confirms before closing apps (unless using -Force)
-- Works from any directory
-- Simple command-line interface
-
-## Installation
-
-1. Clone this repository
-2. Add the directory to your system PATH
-3. Run `pcpow -h` to verify installation
+Edit `pcpow.config.json` to customize:
+```json
+{
+  "AlwaysForce": false,  # Skip confirmations always
+  "NoGraceful": false,   # Skip graceful app closing
+  "timeoutMS": 5000     # Wait time for apps (ms)
+}
+```
 
 ## License
 
-MIT License - Feel free to use and modify 
+MIT License 

@@ -36,8 +36,11 @@ if (-not (Test-Path $shortcutsDir)) {
 Write-Host "Installing PowerShell module..."
 Write-Host "Copying $scriptPath\pcpow-common.psm1 to $userModulePath\$moduleName.psm1"
 Copy-Item "$scriptPath\pcpow-common.psm1" "$userModulePath\$moduleName.psm1" -Force
-Write-Host "Copying $scriptPath\pcpow.config.json to $userModulePath"
+
+# Copy config file to both locations for redundancy
+Write-Host "Copying configuration file..."
 Copy-Item "$scriptPath\pcpow.config.json" "$userModulePath\" -Force
+Copy-Item "$scriptPath\pcpow.config.json" "$shortcutsDir\" -Force
 
 # Verify module files
 if (-not (Test-Path "$userModulePath\$moduleName.psm1")) {
@@ -45,6 +48,9 @@ if (-not (Test-Path "$userModulePath\$moduleName.psm1")) {
 }
 if (-not (Test-Path "$userModulePath\pcpow.config.json")) {
     throw "Failed to copy config file to $userModulePath\pcpow.config.json"
+}
+if (-not (Test-Path "$shortcutsDir\pcpow.config.json")) {
+    throw "Failed to copy config file to $shortcutsDir\pcpow.config.json"
 }
 if (-not (Test-Path $manifestPath)) {
     throw "Failed to create module manifest at $manifestPath"
@@ -92,18 +98,48 @@ Import-Module pcpow-common -MinimumVersion $moduleVersion -Force -ErrorAction St
 
 # PCPow - Power Management Functions
 function global:Sleep-PC {
-    param([switch]`$Force)
-    & "$shortcutsDir\Close-AndSleep.ps1" -Force:`$Force
+    param(
+        [switch]`$Force
+    )
+    try {
+        Import-Module pcpow-common -ErrorAction Stop
+        `$config = Get-Content "$shortcutsDir\pcpow.config.json" | ConvertFrom-Json
+        `$useForce = `$Force -or `$config.AlwaysForce
+        & "$shortcutsDir\Close-AndSleep.ps1" -Force:`$useForce
+    } catch {
+        Write-Warning "Error in Sleep-PC: `$_"
+        & "$shortcutsDir\Close-AndSleep.ps1" -Force:`$Force
+    }
 }
 
 function global:Restart-PCApps {
-    param([switch]`$Force)
-    & "$shortcutsDir\Close-AndRestart.ps1" -Force:`$Force
+    param(
+        [switch]`$Force
+    )
+    try {
+        Import-Module pcpow-common -ErrorAction Stop
+        `$config = Get-Content "$shortcutsDir\pcpow.config.json" | ConvertFrom-Json
+        `$useForce = `$Force -or `$config.AlwaysForce
+        & "$shortcutsDir\Close-AndRestart.ps1" -Force:`$useForce
+    } catch {
+        Write-Warning "Error in Restart-PCApps: `$_"
+        & "$shortcutsDir\Close-AndRestart.ps1" -Force:`$Force
+    }
 }
 
 function global:Stop-PCApps {
-    param([switch]`$Force)
-    & "$shortcutsDir\Close-AndShutdown.ps1" -Force:`$Force
+    param(
+        [switch]`$Force
+    )
+    try {
+        Import-Module pcpow-common -ErrorAction Stop
+        `$config = Get-Content "$shortcutsDir\pcpow.config.json" | ConvertFrom-Json
+        `$useForce = `$Force -or `$config.AlwaysForce
+        & "$shortcutsDir\Close-AndShutdown.ps1" -Force:`$useForce
+    } catch {
+        Write-Warning "Error in Stop-PCApps: `$_"
+        & "$shortcutsDir\Close-AndShutdown.ps1" -Force:`$Force
+    }
 }
 
 # Create aliases
@@ -122,71 +158,17 @@ Write-Host "`nTesting command availability..."
 $testScript = @"
 `$ErrorActionPreference = 'Stop'
 try {
-    Import-Module $moduleName -Force
-    `$commands = Get-Command -Name Sleep-PC, Restart-PCApps, Stop-PCApps, pows, powr, powd -ErrorAction Stop
-    Write-Host "Commands available: `$(`$commands.Name -join ', ')" -ForegroundColor Green
+    Import-Module pcpow-common -Force
+    Write-Host "Available commands:"
+    Write-Host "  pcpow sleep/restart/shutdown"
+    Write-Host "  pows, powr, powd"
+    Write-Host "  Sleep-PC, Restart-PCApps, Stop-PCApps"
 } catch {
-    Write-Warning "Some commands not found. Error: `$_"
+    Write-Warning "Command verification failed: `$_"
 }
 "@
 
 $result = powershell -NoProfile -Command $testScript
-if ($result) {
-    Write-Host "Commands are available:" -ForegroundColor Green
-    $result | ForEach-Object { Write-Host "  - $($_.Name)" }
-} else {
-    Write-Host "Warning: Commands not found. Please check the installation." -ForegroundColor Yellow
-}
-
-# Update pcpow.bat to use full paths
-$batchContent = @"
-@echo off
-setlocal enabledelayedexpansion
-
-if "%~1"=="" goto :help
-if /i "%~1"=="sleep" goto :sleep
-if /i "%~1"=="restart" goto :restart
-if /i "%~1"=="shutdown" goto :shutdown
-if /i "%~1"=="-h" goto :help
-if /i "%~1"=="--help" goto :help
-
-echo Error: Unknown command '%~1'
-echo.
-goto :help
-
-:sleep
-powershell -ExecutionPolicy Bypass -NoProfile -File "!shortcutsDir!\Close-AndSleep.ps1" %2
-exit /b %errorlevel%
-
-:restart
-powershell -ExecutionPolicy Bypass -NoProfile -File "!shortcutsDir!\Close-AndRestart.ps1" %2
-exit /b %errorlevel%
-
-:shutdown
-powershell -ExecutionPolicy Bypass -NoProfile -File "!shortcutsDir!\Close-AndShutdown.ps1" %2
-exit /b %errorlevel%
-
-:help
-echo PCPow - Windows Power Management
-echo -------------------------------
-echo Usage: pcpow [command] [-Force]
-echo.
-echo Commands:
-echo   sleep     - Close all apps and put PC to sleep
-echo   restart   - Close all apps and restart PC
-echo   shutdown  - Close all apps and shutdown PC
-echo.
-echo Options:
-echo   -Force    - Skip confirmation and force close apps
-echo.
-echo Examples:
-echo   pcpow sleep
-echo   pcpow restart -Force
-echo   pcpow shutdown
-exit /b 0
-"@
-
-Set-Content -Path "$shortcutsDir\pcpow.bat" -Value $batchContent
 
 Write-Host "Setup completed successfully!" -ForegroundColor Green
 Write-Host @"
@@ -198,23 +180,23 @@ PCPow has been installed:
 
 You can now use the following commands from anywhere:
 1. From Run menu (Win+R) or Command Prompt:
-   - pcpow sleep
-   - pcpow restart
-   - pcpow shutdown
+   pcpow sleep
+   pcpow restart
+   pcpow shutdown
 
 2. From PowerShell:
-   Short commands:
-   - pow sleep   (or pows)
-   - pow restart (or powr)
-   - pow shutdown (or powd)
+   Quick commands:
+   pows            # Sleep
+   powr            # Restart
+   powd            # Shutdown
    
    Full commands:
-   - Sleep-PC
-   - Restart-PCApps
-   - Stop-PCApps
+   Sleep-PC
+   Restart-PCApps
+   Stop-PCApps
 
 Add -Force to any command to skip confirmation and force close apps.
-Example: pow sleep -Force
+Example: pcpow sleep -Force or pows -Force
 
 Please close and reopen your PowerShell window for the changes to take effect.
 "@

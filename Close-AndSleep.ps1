@@ -39,15 +39,10 @@ try {
 }
 
 try {
-    if ($Force -or (Show-ConfirmationPrompt -ActionType "Sleep")) {
-        Write-PCPowLog "Initiating sleep sequence..." -Level Action
-        if (Close-Applications -TimeoutMS $script:Config.TimeoutMS) {
-            Add-Type -AssemblyName System.Windows.Forms
-            [System.Windows.Forms.Application]::SetSuspendState("Suspend", $false, $false)
-        }
-    }
+    # Call Invoke-PowerAction which handles all the logic including confirmation
+    Invoke-PowerAction -Action 'Sleep' -Force:$Force
 }
 catch {
-    Write-PCPowLog "Error: $_" -Level Error
+    Write-PCPowLog "Error during sleep operation: $_" -Level Error
     exit 1
 } 

@@ -17,15 +17,30 @@ goto :help
 
 :sleep
 powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndSleep.ps1" %2
-exit /b %errorlevel%
+set EXIT_CODE=%errorlevel%
+if %EXIT_CODE% NEQ 0 (
+    echo Operation cancelled or failed with code %EXIT_CODE%
+    exit /b %EXIT_CODE%
+)
+exit /b 0
 
 :restart
 powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndRestart.ps1" %2
-exit /b %errorlevel%
+set EXIT_CODE=%errorlevel%
+if %EXIT_CODE% NEQ 0 (
+    echo Operation cancelled or failed with code %EXIT_CODE%
+    exit /b %EXIT_CODE%
+)
+exit /b 0
 
 :shutdown
 powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndShutdown.ps1" %2
-exit /b %errorlevel%
+set EXIT_CODE=%errorlevel%
+if %EXIT_CODE% NEQ 0 (
+    echo Operation cancelled or failed with code %EXIT_CODE%
+    exit /b %EXIT_CODE%
+)
+exit /b 0
 
 :help
 echo PCPow - Windows Power Management
@@ -39,6 +54,16 @@ echo   shutdown  - Close all apps and shutdown PC
 echo.
 echo Options:
 echo   -Force    - Skip confirmation and force close apps
+echo.
+echo Configuration (pcpow.config.json):
+echo   AlwaysForce: true/false  - Always run in force mode
+echo   NoGraceful: true/false   - Skip graceful app closing
+echo   timeoutMS: number        - Timeout for app closing (ms)
+echo.
+echo PowerShell Shortcuts:
+echo   pows      - Sleep (alias for Sleep-PC)
+echo   powr      - Restart (alias for Restart-PCApps)
+echo   powd      - Shutdown (alias for Stop-PCApps)
 echo.
 echo Examples:
 echo   pcpow sleep

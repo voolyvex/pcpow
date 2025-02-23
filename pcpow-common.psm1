@@ -22,25 +22,46 @@ function Initialize-PCPowConfig {
     )
     
     try {
+        # First try module directory
         if (Test-Path $ConfigPath) {
             $script:Config = Get-Content $ConfigPath -Raw | ConvertFrom-Json
-        } else {
-            Write-Warning "Configuration file not found at $ConfigPath. Using default settings."
-            $script:Config = @{
-                version = "1.0.0"
-                timeoutMS = 5000
-                colors = @{
-                    warning = "Yellow"
-                    success = "Green"
-                    error = "Red"
-                    info = "Cyan"
-                    action = "Magenta"
-                }
-                excludedProcesses = @(
-                    "svchost", "csrss", "smss", "wininit", "winlogon",
-                    "spoolsv", "lsass", "services", "system", "registry", "idle"
-                )
+            Write-PCPowLog "Loaded config from module path: $ConfigPath" -Level Info
+        } 
+        # Then try WindowsApps directory
+        else {
+            $windowsAppsConfig = Join-Path $env:USERPROFILE "AppData\Local\Microsoft\WindowsApps\pcpow.config.json"
+            if (Test-Path $windowsAppsConfig) {
+                $script:Config = Get-Content $windowsAppsConfig -Raw | ConvertFrom-Json
+                Write-PCPowLog "Loaded config from WindowsApps: $windowsAppsConfig" -Level Info
             }
+            else {
+                Write-Warning "Configuration file not found at $ConfigPath or $windowsAppsConfig. Using default settings."
+                $script:Config = @{
+                    version = "1.0.0"
+                    timeoutMS = 5000
+                    AlwaysForce = $false
+                    NoGraceful = $false
+                    colors = @{
+                        warning = "Yellow"
+                        success = "Green"
+                        error = "Red"
+                        info = "Cyan"
+                        action = "Magenta"
+                    }
+                    excludedProcesses = @(
+                        "svchost", "csrss", "smss", "wininit", "winlogon",
+                        "spoolsv", "lsass", "services", "system", "registry", "idle"
+                    )
+                }
+            }
+        }
+
+        # Ensure all required properties exist with proper error checking
+        if (-not (Get-Member -InputObject $script:Config -Name 'AlwaysForce')) {
+            $script:Config | Add-Member -NotePropertyName 'AlwaysForce' -NotePropertyValue $false
+        }
+        if (-not (Get-Member -InputObject $script:Config -Name 'NoGraceful')) {
+            $script:Config | Add-Member -NotePropertyName 'NoGraceful' -NotePropertyValue $false
         }
     }
     catch {
@@ -80,84 +101,172 @@ function Get-UserApps {
 }
 
 function Close-Applications {
-    param([int]$TimeoutMS = 5000)
+    param(
+        [int]$TimeoutMS = 5000,
+        [switch]$NoGraceful
+    )
     
-    # Track processes that need force closing
-    [System.Collections.Generic.List[string]]$remainingProcesses = @()
-    $processes = Get-Process | Where-Object {
-        $_.MainWindowHandle -ne 0 -and 
-        $_.ProcessName -notin $script:Config.excludedProcesses
-    } | Sort-Object -Property WorkingSet64 -Descending
-    
-    # Get all PowerShell windows except current
-    $powershellProcesses = Get-Process powershell, pwsh | Where-Object { $_.Id -ne $PID }
-    $processes = @($processes) + @($powershellProcesses)
-
-    # Include explorer.exe for restart/shutdown
-    $explorer = Get-Process explorer -ErrorAction SilentlyContinue
-    if ($explorer) { $processes += $explorer }
-    
-    if ($processes.Count -eq 0) {
-        Write-PCPowLog "No applications to close." -Level Info
-        return $true # No apps to close, consider it successful
-    }
-
-    Write-PCPowLog "Attempting to close $($processes.Count) applications..." -Level Info
-    
-    # Add timeout tracking
+    # Start timeout tracking immediately
     $stopwatch = [System.Diagnostics.Stopwatch]::StartNew()
     
-    foreach ($process in $processes) {
-        if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMS) {
-            Write-PCPowLog "Timeout reached, proceeding to force close remaining applications." -Level Warning
-            break
-        }
-        try {
-            Write-PCPowLog "Attempting to close $($process.Name) (PID: $($process.Id))..." -Level Info
-            # Request process to close gracefully
-            if ($process.CloseMainWindow()) {
-                Write-PCPowLog "$($process.Name) (PID: $($process.Id)) main window closed, waiting for exit..." -Level Info
-                $process.WaitForExit(($TimeoutMS - $stopwatch.ElapsedMilliseconds))
-                if ($process.HasExited) {
-                    Write-PCPowLog "$($process.Name) (PID: $($process.Id)) closed gracefully." -Level Success
-                    continue # Proceed to next process
-                } else {
-                    Write-PCPowLog "$($process.Name) (PID: $($process.Id)) did not exit in time after MainWindowClose." -Level Warning
-                    $remainingProcesses.Add($process.Name)
-                }
-            } else {
-                Write-PCPowLog "Failed to send MainWindowClose to $($process.Name) (PID: $($process.Id))." -Level Warning
-                $remainingProcesses.Add($process.Name)
-            }
-        } catch {
-            Write-PCPowLog "Error closing $($process.Name): $_" -Level Warning
-            $remainingProcesses.Add($process.Name)
-        }
-    }
-
-    # Force close remaining processes
-    if ($remainingProcesses.Count -gt 0) {
-        Write-PCPowLog "Force closing $($remainingProcesses.Count) remaining applications..." -Level Warning
-        foreach ($procName in $remainingProcesses) {
-            try {
-                # Use taskkill as a more forceful method
-                Write-PCPowLog "Using taskkill /F to force close $($procName)..." -Level Warning
-                taskkill /F /IM "$procName.exe" /T
-                Write-PCPowLog "taskkill /F for $($procName) completed." -Level Success
-            }
-            catch {
-                Write-PCPowLog "Failed to force close $($procName) using taskkill: $_" -Level Error
-            }
-        }
-    }
-
-    if ($remainingProcesses.Count -eq 0) {
-        Write-PCPowLog "All applications closed successfully." -Level Success
-    } else {
-        Write-PCPowLog "Warning: Some applications may not have closed cleanly." -Level Warning
-    }
+    # Determine if we should skip graceful shutdown
+    $useForceMode = $script:Config.AlwaysForce -or $NoGraceful
     
-    return $true
+    # Track processes that need force closing - use HashSet for better performance
+    $remainingProcesses = [System.Collections.Generic.HashSet[string]]::new()
+    
+    # Optimize process collection - do it once and filter efficiently
+    $allProcesses = Get-Process
+    $currentSession = ($allProcesses | Where-Object { $_.Id -eq $PID }).SessionId
+    
+    # More efficient process filtering
+    $processes = $allProcesses | Where-Object {
+        ($_.MainWindowHandle -ne 0 -or $_.ProcessName -eq 'explorer') -and 
+        $_.SessionId -eq $currentSession -and
+        $_.ProcessName -notin $script:Config.excludedProcesses
+    } | Sort-Object -Property WorkingSet64 -Descending
+
+    # Categorize processes by importance
+    $criticalProcesses = $processes | Where-Object {
+        $_.ProcessName -match "^(explorer|SearchUI|StartMenuExperienceHost|Cortana|SearchApp)$"
+    }
+    $userProcesses = $processes | Where-Object {
+        $_ -notin $criticalProcesses
+    }
+
+    # Handle File Explorer windows first - optimized for speed
+    try {
+        Write-PCPowLog "Closing File Explorer windows..." -Level Info
+        
+        # Force close approach for Explorer when in force mode
+        if ($useForceMode) {
+            Write-PCPowLog "Using force mode for Explorer..." -Level Warning
+            try {
+                # Try graceful close first for Explorer
+                $shell = New-Object -ComObject Shell.Application
+                $shell.Windows() | ForEach-Object {
+                    try {
+                        if ($_.FullName -match "explorer\.exe$") { 
+                            $_.Quit()
+                            Start-Sleep -Milliseconds 100
+                        }
+                    } catch { }
+                }
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+
+                # Only force close if graceful failed
+                Get-Process explorer -ErrorAction SilentlyContinue | ForEach-Object {
+                    if ($_.MainWindowHandle -ne 0) {
+                        $_.CloseMainWindow() | Out-Null
+                        Start-Sleep -Milliseconds 100
+                        if (-not $_.HasExited) {
+                            Stop-Process -Id $_.Id -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                }
+                Start-Sleep -Milliseconds 500
+                Start-Process explorer
+            }
+            catch { }
+        }
+        else {
+            # Original graceful approach for Explorer
+            try {
+                $shell = New-Object -ComObject Shell.Application
+                $shell.Windows() | ForEach-Object {
+                    try {
+                        if ($_.FullName -match "explorer\.exe$") { 
+                            $_.Quit()
+                            Start-Sleep -Milliseconds 100
+                        }
+                    } catch { }
+                }
+                [System.Runtime.Interopservices.Marshal]::ReleaseComObject($shell) | Out-Null
+            }
+            catch { }
+        }
+
+        # Always clean up Explorer state
+        try {
+            $regPaths = @(
+                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\BrowseForFolder",
+                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRU",
+                "HKCU:\Software\Microsoft\Windows\CurrentVersion\Explorer\ComDlg32\LastVisitedPidlMRULegacy"
+            )
+            foreach ($path in $regPaths) {
+                if (Test-Path $path) {
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+                }
+            }
+        }
+        catch { }
+
+        Start-Sleep -Milliseconds 500 # Give Explorer time to stabilize
+    }
+    catch {
+        Write-PCPowLog "Explorer cleanup encountered issues: $_" -Level Warning
+    }
+
+    # Handle user processes first (aggressive)
+    if ($useForceMode) {
+        Write-PCPowLog "Force closing user applications..." -Level Warning
+        foreach ($process in $userProcesses) {
+            try {
+                Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                Start-Sleep -Milliseconds 50
+            } catch { }
+        }
+    }
+    else {
+        # Original graceful shutdown logic for user processes
+        foreach ($process in $userProcesses) {
+            if ($stopwatch.ElapsedMilliseconds -ge $TimeoutMS) {
+                break
+            }
+            try {
+                if (-not $process.HasExited) {
+                    Write-PCPowLog "Closing $($process.Name) (PID: $($process.Id))..." -Level Info
+                    if ($process.CloseMainWindow()) {
+                        $process.WaitForExit(2000)
+                    }
+                }
+            } catch { }
+        }
+    }
+
+    # Handle critical processes more carefully
+    foreach ($process in $criticalProcesses) {
+        try {
+            if (-not $process.HasExited) {
+                Write-PCPowLog "Carefully closing $($process.Name)..." -Level Info
+                if ($process.CloseMainWindow()) {
+                    $process.WaitForExit(2000)
+                }
+                if (-not $process.HasExited) {
+                    Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+                }
+            }
+        } catch { }
+    }
+
+    # Final verification and cleanup
+    $remainingProcesses = $processes | Where-Object { -not $_.HasExited }
+    if ($remainingProcesses) {
+        Write-PCPowLog "Force closing remaining applications..." -Level Warning
+        foreach ($process in $remainingProcesses) {
+            try {
+                taskkill /F /IM "$($process.ProcessName).exe" /T 2>&1 | Out-Null
+            } catch { }
+        }
+    }
+
+    # Final cleanup
+    [System.GC]::Collect()
+    [System.GC]::WaitForPendingFinalizers()
+
+    # Verify all processes are closed
+    $remainingCount = ($processes | Where-Object { -not $_.HasExited }).Count
+    return $remainingCount -eq 0
 }
 
 function Show-ConfirmationPrompt {
@@ -166,7 +275,14 @@ function Show-ConfirmationPrompt {
         [string]$ActionType
     )
 
-    $title = "Confirm $ActionType"
+    # If AlwaysForce is enabled, skip confirmation
+    if ($script:Config.AlwaysForce) {
+        Write-PCPowLog "Skipping confirmation (AlwaysForce mode)" -Level Info
+        return $true
+    }
+
+    $modeInfo = if ($script:Config.NoGraceful) { " (NoGraceful mode)" } else { "" }
+    $title = "Confirm $ActionType$modeInfo"
     $message = "WARNING: This will close all running programs and $ActionType.`nSave any important work before continuing.`nProceed?"
 
     $yes = New-Object System.Management.Automation.Host.ChoiceDescription "&Yes", "Confirm $ActionType"
@@ -174,7 +290,13 @@ function Show-ConfirmationPrompt {
     $options = [System.Management.Automation.Host.ChoiceDescription[]]($yes, $no)
 
     $result = $host.ui.PromptForChoice($title, $message, $options, 1)
-    return $result -eq 0
+    
+    # If user selected No, return false
+    if ($result -ne 0) {
+        Write-PCPowLog "Operation cancelled by user" -Level Warning
+        return $false
+    }
+    return $true
 }
 
 function Invoke-PowerAction {
@@ -188,25 +310,47 @@ function Invoke-PowerAction {
     try {
         Write-Host "Initiating $Action sequence..." -ForegroundColor $script:Config.Colors.Action
         
-        $userApps = Get-UserApps
-        if ($userApps.Count -gt 0) {
-            Write-Host "Closing $($userApps.Count) applications..." -ForegroundColor $script:Config.Colors.Info
-            if (-not (Close-Applications -TimeoutMS $script:Config.TimeoutMS)) {
-                if ($Force) {
-                    Write-PCPowLog "Forcefully terminating remaining applications..." -Level Warning
-                    Get-Process | Where-Object {
-                        $_.Id -in $remainingProcesses.Id
-                    } | Stop-Process -Force
-                }
-                throw "Application closure failed"
+        # Check confirmation first
+        if (-not $Force -and -not $script:Config.AlwaysForce) {
+            if (-not (Show-ConfirmationPrompt -ActionType $Action)) {
+                Write-PCPowLog "Operation cancelled" -Level Warning
+                return
+            }
+        }
+        
+        # Use configuration settings for Force and NoGraceful
+        $useForce = $Force -or $script:Config.AlwaysForce
+        
+        # Determine timeout based on force mode
+        $timeout = if ($useForce) { 3000 } else { $script:Config.TimeoutMS }
+        
+        # Close applications with optimized parameters
+        if (-not (Close-Applications -TimeoutMS $timeout -NoGraceful $script:Config.NoGraceful)) {
+            if (-not $useForce) {
+                throw "Some applications could not be closed cleanly"
             }
         }
 
         Write-Host "Performing $Action..." -ForegroundColor $script:Config.Colors.Action
         switch ($Action) {
-            'Restart' { Restart-Computer -Force:$Force }
-            'Shutdown' { Stop-Computer -Force:$Force }
-            'Sleep' { Add-Type -AssemblyName System.Windows.Forms; [System.Windows.Forms.Application]::SetSuspendState("Suspend", $false, $false) }
+            'Restart' { 
+                if ($useForce) {
+                    shutdown /r /f /t 0
+                } else {
+                    Restart-Computer -Force:$useForce
+                }
+            }
+            'Shutdown' { 
+                if ($useForce) {
+                    shutdown /s /f /t 0
+                } else {
+                    Stop-Computer -Force:$useForce
+                }
+            }
+            'Sleep' { 
+                Add-Type -AssemblyName System.Windows.Forms
+                [System.Windows.Forms.Application]::SetSuspendState("Suspend", $useForce, $false)
+            }
         }
     }
     catch {

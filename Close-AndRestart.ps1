@@ -39,23 +39,10 @@ try {
 }
 
 try {
-    $confirmMessage = "Are you sure you want to restart the computer? This will close all applications."
-    if ($Force -or $host.UI.PromptForChoice("Confirm Restart", $confirmMessage, @("&Yes", "&No"), 1) -eq 0) {
-        # Close all applications gracefully
-        Get-Process | Where-Object { $_.MainWindowTitle -ne "" } | Stop-Process -Force
-
-        # Wait a moment for processes to close
-        Start-Sleep -Seconds 2
-
-        # Restart computer
-        Restart-Computer -Force
-    }
+    # Call Invoke-PowerAction which handles all the logic including confirmation
+    Invoke-PowerAction -Action 'Restart' -Force:$Force
 }
 catch {
-    Write-PCPowLog "Error: $_" -Level Error
+    Write-PCPowLog "Error during restart operation: $_" -Level Error
     exit 1
-}
-
-# Ensure restart happens even if there are errors
-Write-Host "Forcing immediate restart..." -ForegroundColor Red
-shutdown.exe /r /f /t 0 
+} 
