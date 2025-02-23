@@ -21,14 +21,22 @@ pcpow shutdown  # Shutdown PC
 
 From PowerShell:
 ```powershell
+# Quick aliases:
 pows    # Sleep
 powr    # Restart
 powd    # Shutdown
+
+# Full commands:
+Start-PCSleep
+Restart-PC
+Stop-PC
 ```
 
 Add `-Force` to skip confirmations:
 ```
 pcpow sleep -Force
+# or
+Start-PCSleep -Force
 ```
 
 ## Configure

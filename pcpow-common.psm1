@@ -502,18 +502,18 @@ function Start-PowerOperation {
 # Initialize configuration when module is imported
 Initialize-PCPowConfig
 
-# Define the functions for the aliases
-function Sleep-PC { param([switch]$Force) Invoke-PowerAction -Action Sleep -Force:$Force }
-function Restart-PCApps { param([switch]$Force) Invoke-PowerAction -Action Restart -Force:$Force }
-function Stop-PCApps { param([switch]$Force) Invoke-PowerAction -Action Shutdown -Force:$Force }
+# Define the functions with approved verbs
+function Start-PCSleep { param([switch]$Force) Invoke-PowerAction -Action Sleep -Force:$Force }
+function Restart-PC { param([switch]$Force) Invoke-PowerAction -Action Restart -Force:$Force }
+function Stop-PC { param([switch]$Force) Invoke-PowerAction -Action Shutdown -Force:$Force }
 
 # Export module members
 Export-ModuleMember -Function @(
     'Initialize-PCPowConfig',
     'Get-UserApps',
-    'Sleep-PC',
-    'Restart-PCApps',
-    'Stop-PCApps',
+    'Start-PCSleep',
+    'Restart-PC',
+    'Stop-PC',
     'Close-Applications',
     'Show-ConfirmationPrompt',
     'Invoke-PowerAction',
@@ -521,6 +521,6 @@ Export-ModuleMember -Function @(
 ) -Alias @('pows', 'powr', 'powd')
 
 # Set up aliases
-New-Alias -Name pows -Value Sleep-PC -Force
-New-Alias -Name powr -Value Restart-PCApps -Force
-New-Alias -Name powd -Value Stop-PCApps -Force 
+New-Alias -Name pows -Value Start-PCSleep -Force
+New-Alias -Name powr -Value Restart-PC -Force
+New-Alias -Name powd -Value Stop-PC -Force 

@@ -16,7 +16,7 @@ echo.
 goto :help
 
 :sleep
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndSleep.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndSleep.ps1" %*
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%
@@ -25,7 +25,7 @@ if %EXIT_CODE% NEQ 0 (
 exit /b 0
 
 :restart
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndRestart.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndRestart.ps1" %*
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%
@@ -34,7 +34,7 @@ if %EXIT_CODE% NEQ 0 (
 exit /b 0
 
 :shutdown
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndShutdown.ps1" %2
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_DIR%Close-AndShutdown.ps1" %*
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%

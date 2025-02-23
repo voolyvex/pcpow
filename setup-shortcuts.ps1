@@ -185,15 +185,15 @@ You can now use the following commands from anywhere:
    pcpow shutdown
 
 2. From PowerShell:
-   Quick commands:
+   Quick aliases:
    pows            # Sleep
    powr            # Restart
    powd            # Shutdown
    
    Full commands:
-   Sleep-PC
-   Restart-PCApps
-   Stop-PCApps
+   Start-PCSleep
+   Restart-PC
+   Stop-PC
 
 Add -Force to any command to skip confirmation and force close apps.
 Example: pcpow sleep -Force or pows -Force
