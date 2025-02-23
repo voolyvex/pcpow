@@ -1,4 +1,0 @@
-[33m6d46db7[m[33m ([m[1;36mHEAD -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m bug fixes
-[33m9740480[m docs: Simplify README and update installation URL
-[33mf91df11[m Major improvements: Centralized configuration, better error handling, and documentation
-[33md3b0319[m Initial commit: PCPow Windows power management scripts
