@@ -97,7 +97,7 @@ if (-not (`$env:PSModulePath -split ';' -contains `$modulePath)) {
 Import-Module pcpow-common -MinimumVersion $moduleVersion -Force -ErrorAction Stop
 
 # PCPow - Power Management Functions
-function global:Sleep-PC {
+function global:Start-PCSleep {
     param(
         [switch]`$Force
     )
@@ -107,12 +107,12 @@ function global:Sleep-PC {
         `$useForce = `$Force -or `$config.AlwaysForce
         & "$shortcutsDir\Close-AndSleep.ps1" -Force:`$useForce
     } catch {
-        Write-Warning "Error in Sleep-PC: `$_"
+        Write-Warning "Error in Start-PCSleep: `$_"
         & "$shortcutsDir\Close-AndSleep.ps1" -Force:`$Force
     }
 }
 
-function global:Restart-PCApps {
+function global:Restart-PC {
     param(
         [switch]`$Force
     )
@@ -122,12 +122,12 @@ function global:Restart-PCApps {
         `$useForce = `$Force -or `$config.AlwaysForce
         & "$shortcutsDir\Close-AndRestart.ps1" -Force:`$useForce
     } catch {
-        Write-Warning "Error in Restart-PCApps: `$_"
+        Write-Warning "Error in Restart-PC: `$_"
         & "$shortcutsDir\Close-AndRestart.ps1" -Force:`$Force
     }
 }
 
-function global:Stop-PCApps {
+function global:Stop-PC {
     param(
         [switch]`$Force
     )
@@ -137,15 +137,15 @@ function global:Stop-PCApps {
         `$useForce = `$Force -or `$config.AlwaysForce
         & "$shortcutsDir\Close-AndShutdown.ps1" -Force:`$useForce
     } catch {
-        Write-Warning "Error in Stop-PCApps: `$_"
+        Write-Warning "Error in Stop-PC: `$_"
         & "$shortcutsDir\Close-AndShutdown.ps1" -Force:`$Force
     }
 }
 
 # Create aliases
-Set-Alias -Name pows -Value Sleep-PC -Scope Global
-Set-Alias -Name powr -Value Restart-PCApps -Scope Global
-Set-Alias -Name powd -Value Stop-PCApps -Scope Global
+Set-Alias -Name pows -Value Start-PCSleep -Scope Global
+Set-Alias -Name powr -Value Restart-PC -Scope Global
+Set-Alias -Name powd -Value Stop-PC -Scope Global
 
 Write-Host "PCPow commands loaded successfully" -ForegroundColor Green
 # PCPow End
@@ -162,7 +162,7 @@ try {
     Write-Host "Available commands:"
     Write-Host "  pcpow sleep/restart/shutdown"
     Write-Host "  pows, powr, powd"
-    Write-Host "  Sleep-PC, Restart-PCApps, Stop-PCApps"
+    Write-Host "  Start-PCSleep, Restart-PC, Stop-PC"
 } catch {
     Write-Warning "Command verification failed: `$_"
 }

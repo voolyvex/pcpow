@@ -56,14 +56,20 @@ echo Options:
 echo   -Force    - Skip confirmation and force close apps
 echo.
 echo Configuration (pcpow.config.json):
-echo   AlwaysForce: true/false  - Always run in force mode
-echo   NoGraceful: true/false   - Skip graceful app closing
-echo   timeoutMS: number        - Timeout for app closing (ms)
+echo   AlwaysForce: true/false  - Skip confirmations
+echo   NoGraceful: true/false   - Skip graceful closing
+echo   timeoutMS: number        - Wait time for apps (ms)
 echo.
-echo PowerShell Shortcuts:
-echo   pows      - Sleep (alias for Sleep-PC)
-echo   powr      - Restart (alias for Restart-PCApps)
-echo   powd      - Shutdown (alias for Stop-PCApps)
+echo PowerShell Commands:
+echo   Quick aliases:
+echo   pows            - Sleep
+echo   powr            - Restart
+echo   powd            - Shutdown
+echo.
+echo   Full commands:
+echo   Start-PCSleep   - Sleep
+echo   Restart-PC      - Restart
+echo   Stop-PC         - Shutdown
 echo.
 echo Examples:
 echo   pcpow sleep
