@@ -1,6 +1,14 @@
-# PCPow
+# PCPow (v1.1.0)
 
 Safely close apps and put your Windows PC to sleep, restart, or shutdown.
+
+## What's New in v1.1.0
+
+- **Better Terminal Detection**: Properly handles all PowerShell and Terminal windows
+- **Admin Window Support**: Special handling for elevated PowerShell windows 
+- **Process Tree Protection**: Improved detection to prevent closing the current process tree
+- **Enhanced Sleep Logic**: Multiple sleep methods for more reliable sleep behavior
+- **Suspended Process Handling**: Detects and cleans up unresponsive applications
 
 ## Install
 
@@ -55,9 +63,18 @@ Edit `pcpow.config.json`:
 - Commands not found? Restart PowerShell
 - Permission error? Run as administrator
 - Apps won't close? Use `-Force`
+- Terminal windows still open? Update to v1.1.0+
+- Sleep issues? Use `-Force` to enable aggressive sleep methods
 
 ## Requirements
 
 - Windows 10+
 - PowerShell 5.1+
-- Admin rights (install only) 
+- Admin rights (install only)
+
+## Common Issues Fixed
+
+- **Terminal Windows**: Fixed issues with closing PowerShell/Terminal windows
+- **Admin Privileges**: Better handling of elevated windows
+- **Sleep Reliability**: Multiple fallback methods if primary sleep fails
+- **Process Tree Detection**: Now correctly identifies all parent/child processes
