@@ -1,0 +1,188 @@
+---
+description: 
+globs: 
+alwaysApply: true
+---
+
+# PCPOW Development Rules for PowerShell Scripting
+
+## 1. Autonomous Agent Action
+
+### 1.1 Always Act Autonomously (except as specified in 1.2)
+- Execute actions without manual intervention from the user
+- Use MCP tools autonomously within PowerShell context
+- Execute commands in the proper scope and context
+- Prevent hanging sessions with appropriate timeouts
+- Critically evaluate the purpose and effectiveness of each action
+- Use PowerShell jobs for long-running tasks with proper monitoring
+
+### 1.2 Required Confirmations
+Despite increased autonomy, confirmation is required for:
+- Major architectural changes affecting multiple systems
+- File deletions if they were not explicitly requested
+- **Before** creation of directory structures with complex naming patterns
+- Scripts that lack proper verification checks or error handling
+- Actions that modify system registry or security settings
+- Operations requiring elevated privileges
+- Commands that could cause service interruptions
+
+## 2. Path Verification, Files, and Folders
+
+### 2.1 Core PowerShell Path Principles
+When working with files and directories in PowerShell, always:
+1. **Verify Current Directory**: Use `Get-Location` to confirm working directory
+2. **Validate File Existence**: Use `Test-Path` before file operations
+3. **Confirm Directory Changes**: Verify `Set-Location` success with error handling
+4. **Use Absolute Paths**: Leverage `Resolve-Path` for critical operations
+5. **Check Operation Results**: Use return values and `$?` to confirm success
+6. **Use PowerShell Providers**: Utilize file system provider capabilities when appropriate
+
+### 2.2 Common PowerShell Path Pitfalls to Avoid
+1. **Assuming Current Directory**: Always capture and verify `Get-Location`
+2. **Not Checking Operation Results**: Check `$?` and `$LASTEXITCODE` after operations
+3. **Using Relative Paths Without Verification**: Always resolve relative paths
+4. **Hardcoding Environment-Specific Paths**: Use `$env:` variables and join paths properly
+5. **Missing Error Handling for Path Operations**: Implement try/catch blocks
+6. **Improper Path Joining**: Use `Join-Path` instead of string concatenation
+7. **Ignoring PowerShell Drive Structure**: Respect PS drives and their providers
+
+## 3. PowerShell Command Standards
+
+### 3.1 PowerShell Execution Principles
+1. **Directory Awareness**: Always use `Get-Location` and `Set-Location` with verification
+2. **Error Handling**: Use try/catch blocks and `$ErrorActionPreference` settings
+3. **Path Consistency**: Utilize `Resolve-Path` and `Join-Path` for reliability
+4. **Environment Preservation**: Use script scopes and `$using:` for variable persistence
+5. **Clear Feedback**: Implement `Write-Output`, `Write-Host`, and `Write-Error` appropriately
+6. **Parameter Validation**: Use parameter validation attributes for robust command input
+7. **Security Awareness**: Follow execution policy guidelines and least privilege principles
+
+### 3.2 PowerShell Command Table
+
+| Cmd Purpose | Command | PowerShell Alternative | Notes |
+|-------------|---------|------------------------|-------|
+| List files | `dir` | `Get-ChildItem` | Use `-Force` to show hidden items |
+| Show all files | `dir /a` | `Get-ChildItem -Force` | Shows all files including hidden |
+| Display file | `type` | `Get-Content` | Uses proper encoding detection |
+| Search content | `findstr` | `Select-String` | Provides regex pattern matching |
+| Delete files | `del` | `Remove-Item` | Use `-Force` for read-only files |
+| Delete dirs | `rmdir /s /q` | `Remove-Item -Recurse -Force` | Recursively removes directories |
+| Copy files | `copy` | `Copy-Item` | More options and better error handling |
+| Move files | `move` | `Move-Item` | Preserves metadata |
+| Create empty file | `echo.>` | `New-Item -ItemType File` | Creates with proper permissions |
+| Create dirs | `if not exist...` | `New-Item -ItemType Directory -Force` | Creates parent directories automatically |
+| Find files | `dir /s` | `Get-ChildItem -Recurse` | More efficient recursive search |
+| Check existence | `if exist` | `Test-Path` | Returns boolean for easy testing |
+
+### 3.3 PowerShell Best Practices
+
+1. **Use Cmdlets Over Aliases**: Use full cmdlet names in scripts (`Get-ChildItem` not `dir` or `ls`)
+2. **Proper Parameter Usage**: Use named parameters over positional parameters
+3. **Pipeline Awareness**: Leverage the pipeline for efficiency and readability
+4. **Object-Oriented Approach**: Work with objects rather than text output
+5. **Consistent Formatting**: Use `Format-Table`, `Format-List` appropriately
+6. **Module Organization**: Structure code into functions and modules
+7. **Use PowerShell Types**: Leverage strong typing with `[type]` annotations
+8. **Error Stream Management**: Direct errors to proper streams (`Write-Error`)
+9. **Script Signing**: Follow appropriate signing practices for production scripts
+10. **Progress Reporting**: Use `Write-Progress` for long-running operations
+
+### 3.4 Prohibited Patterns
+
+1. **Unix-Style Options**: No `-p` flags; use PowerShell parameter syntax
+2. **Unix-Style Pipes**: No `| grep` patterns; use PowerShell pipeline objects
+3. **Unix Path Separators**: Use `\` not `/` (though PowerShell can handle both)
+4. **Unix Commands**: No `ls`, `grep`, etc.; use PowerShell cmdlets
+5. **Command Prompt Syntax**: No `%variable%`; use `$variable` instead
+6. **Batch File Logic**: No `goto` or labels; use proper flow control
+7. **Non-PowerShell Escaping**: Use PowerShell escape sequences (`-like`, `-match`)
+8. **String Concatenation for Paths**: Use `Join-Path` instead
+
+## 4. Error Handling, Problem Solving, and Implementation Patterns
+
+### 4.1 PowerShell Implementation Questions
+- Reference PowerShell documentation and Microsoft best practices first
+- Check existing implementations for PowerShell design patterns
+- Use PowerShell Gallery for established modules and solutions
+- Leverage `Get-Help` and `Get-Command` for discovery
+- Use sequential thinking with pipeline processing for complex problems
+- Consider performance implications of different PowerShell approaches
+
+### 4.2 PowerShell Error Recovery Actions
+If autonomous action produces errors:
+1. Use PowerShell transactions when available (`Start-Transaction`)
+2. Implement try/catch/finally blocks with appropriate cleanup
+3. Capture and analyze errors with `$Error` collection
+4. Log specific error conditions with `Write-Error` and EventLog cmdlets
+5. Propose solution with explanation based on PowerShell capabilities
+6. Verify paths, permissions, and execution policy before retrying
+7. Implement appropriate error handling based on cmdlet requirements
+
+### 4.3 PowerShell-Specific Implementation Patterns
+
+1. **Script Framework**:
+   ```powershell
+   [CmdletBinding()]
+   param(
+       [Parameter(Mandatory=$true)]
+       [string]$RequiredParameter
+   )
+   
+   begin {
+       # Initialize resources, verify environment
+       $ErrorActionPreference = "Stop"
+       if (-not (Test-Path $RequiredPath)) {
+           throw "Required path not found: $RequiredPath"
+       }
+   }
+   
+   process {
+       try {
+           # Main script logic
+       }
+       catch {
+           Write-Error "Error occurred: $_"
+           # Recovery logic
+       }
+       finally {
+           # Cleanup
+       }
+   }
+   
+   end {
+       # Final cleanup and reporting
+   }
+   ```
+
+2. **Path Verification Pattern**:
+   ```powershell
+   $currentLocation = Get-Location
+   Write-Verbose "Working in directory: $currentLocation"
+   
+   $targetPath = Join-Path -Path $currentLocation -ChildPath "target"
+   if (-not (Test-Path -Path $targetPath)) {
+       Write-Verbose "Creating directory: $targetPath"
+       New-Item -Path $targetPath -ItemType Directory -Force
+   }
+   ```
+
+3. **Error Handling Pattern**:
+   ```powershell
+   try {
+       $result = Invoke-Command -ScriptBlock { 
+           # Potentially problematic code
+       } -ErrorAction Stop
+       
+       if (-not $?) {
+           throw "Command failed silently"
+       }
+       
+       if ($LASTEXITCODE -ne 0) {
+           throw "Command exited with code $LASTEXITCODE"
+       }
+   }
+   catch {
+       Write-Error "Operation failed: $_"
+       # Recovery actions
+   }
+   ```

@@ -1,0 +1,61 @@
+{
+    "version": "1.2.2",
+    "timeoutMS": 5000,
+    "AlwaysForce": false,
+    "NoGraceful": false,
+    "logLevel": "Info",
+    "maxLogFilesPerDay": 3,
+    "colors": {
+        "warning": "Yellow",
+        "success": "Green",
+        "error": "Red",
+        "info": "Cyan",
+        "action": "Magenta",
+        "debug": "DarkGray"
+    },
+    "excludedProcesses": [
+        "svchost",
+        "csrss",
+        "smss",
+        "wininit",
+        "winlogon",
+        "spoolsv",
+        "lsass",
+        "services",
+        "system",
+        "registry",
+        "idle",
+        "dwm",
+        "fontdrvhost",
+        "Memory Compression",
+        "SearchIndexer",
+        "ShellExperienceHost",
+        "sihost",
+        "taskmgr",
+        "SecurityHealthService",
+        "RuntimeBroker",
+        "dllhost",
+        "ctfmon",
+        "conhost",
+        "WmiPrvSE",
+        "MsMpEng",
+        "SearchHost",
+        "SearchApp",
+        "StartMenuExperienceHost",
+        "ApplicationFrameHost",
+        "explorer",
+        "powershell",
+        "powershell_ise",
+        "WindowsTerminal",
+        "cmd",
+        "pwsh"
+    ],
+    "wakeOnLan": {
+        "port": 9,
+        "allowedRemoteAccess": true,
+        "freia": {
+            "ipAddress": "fe80::d698:81ea:a618:7b4c",
+            "hostName": "FREIA"
+        }
+    }
+}
