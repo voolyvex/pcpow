@@ -1,8 +1,38 @@
 # Changelog
 
-## v1.2.2
+## [1.2.3] - 2025-04-05
 
-Released: May 17, 2023
+### Fixed
+- Critical bug in PowerShell profile causing parameter passing errors
+- Replaced fix-profile-v2.ps1 with enhanced update-profile.ps1 utility to thoroughly clean profile
+- Eliminated references to obsolete Close-And*.ps1 scripts
+- Improved handling of obsolete file references in PowerShell profile
+- Switched from array-based parameter passing to proper hashtable splatting
+- Improved path handling for script locations
+- Better error reporting when files are not found
+- Fixed issue with PCPow-Launcher.ps1 string interpolation that caused unexpected token errors
+- Fixed PowerShell profile corruption issues
+- Improved error handling in all scripts
+- Fixed commands closing terminal window
+- Verified pows and powr commands working properly
+- Corrected pcpow.bat argument handling
+- Fixed PCPow-Launcher.ps1 missing Start-Process command
+
+### Added
+- Comprehensive installation script (`Install-PCPow.ps1`)
+- Better logging and error messages
+- SkipAction parameter for testing without executing actual power commands
+- Improved documentation (README, CHANGELOG, Project Summary, LinkedIn Post)
+- Added `Setup-WakeOnLAN` function to `PCPow.ps1` and PowerShell profile
+
+### Changed
+- Relocated main scripts to dedicated bin directory (within the install path)
+- Simplified command structure
+- Enhanced error reporting
+- Improved Wake-on-LAN configuration
+- Centralized functions into `Install-PCPow.ps1` for setup
+
+## [1.2.2] - May 17, 2023
 
 ### Fixed
 - Critical issue with sleep/restart/shutdown actions not completing after closing applications
@@ -16,9 +46,7 @@ Released: May 17, 2023
 - Expanded list of known applications to ensure proper closure
 - More aggressive process termination for stubborn applications that resist standard closure methods
 
-## v1.2.1
-
-Released: April 4, 2025
+## [1.2.1] - April 4, 2025
 
 ### Fixed
 - Critical bug in PowerShell profile causing parameter passing errors
@@ -30,9 +58,7 @@ Released: April 4, 2025
 - Better error reporting when files are not found
 - Simplified setup process to automatically update profile
 
-## v1.2.0
-
-Released: April 3, 2025
+## v1.2.0 - April 3, 2025
 
 ### Added
 - Wake-on-LAN functionality to wake remote PCs
@@ -57,9 +83,7 @@ Released: April 3, 2025
 - Inefficient process tree handling
 - Fast Startup interference with Wake-on-LAN
 
-## v1.1.0
-
-Released: April 3, 2025
+## v1.1.0 - April 3, 2025
 
 ### Added
 - Enhanced terminal process detection and handling
@@ -80,9 +104,7 @@ Released: April 3, 2025
 - Centralized process tree management
 - Version bump to 1.1.0
 
-## v1.0.0
-
-Released: March 15, 2025
+## v1.0.0 - March 15, 2025
 
 ### Added
 - Initial release
