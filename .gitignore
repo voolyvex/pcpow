@@ -1,0 +1,9 @@
+$PROFILE  
+wake-targets.txt
+*.txt
+*.csv
+*.xlsx
+*.xls
+*.doc
+*.docx
+.cursor/
