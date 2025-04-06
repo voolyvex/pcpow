@@ -92,3 +92,35 @@ For issues or questions, please create an issue on the GitHub repository: [https
 ## License
 
 [MIT License](LICENSE)
+
+### Wake-on-LAN Configuration
+
+1. Copy `pcpow.config.template.json` to `pcpow.config.json`
+2. Edit to add your target devices:
+   ```json
+   "wakeOnLan": {
+     "port": 9,
+     "allowedRemoteAccess": true,
+     "your_device_name": {
+       "ipAddress": "192.168.1.100", 
+       "hostName": "YOUR-PC-NAME"
+     }
+   }
+   ```
+3. Configure BIOS/UEFI settings on the target device:
+   - Enable "Wake on LAN" or "Power On By PCI-E/PCI" (names vary by manufacturer)
+   - Enable "UEFI Network Stack" if available
+   - Disable "Fast Startup" in Windows (Control Panel → Power Options)
+   - Enable "Intel LAN" or similar network controller settings
+   - Disable "Deep Sleep" modes that might interfere with WoL
+
+> **IMPORTANT**: BIOS/UEFI settings vary significantly between manufacturers and even between models from the same manufacturer. Incorrect BIOS changes can potentially affect system stability or functionality. Always consult your motherboard or system documentation before making changes. Adjust BIOS settings at your own risk.
+
+For common BIOS configurations by manufacturer:
+- **ASUS**: Advanced → APM Configuration → Power On By PCI-E/PCI → Enabled
+- **MSI**: Settings → Advanced → Wake Up Event Setup → Resume By PCI-E Device → Enabled
+- **Gigabyte**: BIOS → Power → Wake on LAN → Enabled
+- **Dell**: Power Management → Wake on LAN → Enabled
+- **HP**: Advanced → Power-On Options → Wake on LAN → Enabled
+
+The `Setup-WakeOnLAN.ps1` script attempts to configure your network adapters automatically, but manual BIOS configuration is still required in most cases.

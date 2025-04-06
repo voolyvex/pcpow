@@ -1,6 +1,6 @@
 MIT License
 
-Copyright (c) 2025 Windows Power Management Scripts
+Copyright (c) 2025 Voolyvex | Windows Power Management Scripts
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
@@ -18,4 +18,12 @@ FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
 AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE. 
+SOFTWARE.
+
+DISCLAIMER: This software may provide guidance for modifying BIOS/UEFI settings
+and system configurations. Incorrect changes to these settings can potentially
+affect system stability, functionality, or in extreme cases, cause hardware
+damage. All users should consult their system documentation before making any
+changes to BIOS/UEFI settings. The creators and contributors of this software
+assume no responsibility for any damages resulting from improper use or
+configuration of these settings. 
