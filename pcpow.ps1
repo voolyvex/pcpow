@@ -1323,3 +1323,187 @@ Write-LogMessage "PCPow finished in $( (Get-Date) - $startTime ).TotalSeconds se
 exit 0
 
 #endregion 
+
+# Function to send Wake-on-LAN packet
+function Send-WakePacket {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$MACAddress
+    )
+    
+    # Validate MAC address format
+    if ($MACAddress -notmatch '^([0-9A-F]{2}[:-]){5}([0-9A-F]{2})$') {
+        Write-LogMessage "Invalid MAC address format. Use format: 00:11:22:33:44:55" -Level Error
+        return $false
+    }
+    
+    # Clean the MAC address
+    $MAC = $MACAddress -replace '[:-]', ''
+    
+    try {
+        # Create the magic packet
+        $MacByteArray = [byte[]]::new(102)
+        
+        # First 6 bytes are 0xFF
+        for ($i = 0; $i -lt 6; $i++) {
+            $MacByteArray[$i] = 0xFF
+        }
+        
+        # Repeat target MAC 16 times
+        for ($i = 1; $i -le 16; $i++) {
+            for ($j = 0; $j -lt 6; $j++) {
+                $MacByteArray[6 * $i + $j] = [Convert]::ToByte($MAC.Substring($j * 2, 2), 16)
+            }
+        }
+        
+        # Get the configured port from config, default to 9
+        $port = 9
+        if ($script:config -and $script:config.wakeOnLan -and $script:config.wakeOnLan.port) {
+            $port = $script:config.wakeOnLan.port
+        }
+        Write-LogMessage "Using Wake-on-LAN port: $port" -Level Debug
+        
+        $successCount = 0
+        $errorCount = 0
+        
+        # Send to standard broadcast
+        try {
+            $UdpClient = New-Object System.Net.Sockets.UdpClient
+            $UdpClient.Connect([System.Net.IPAddress]::Broadcast, $port)
+            $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+            $UdpClient.Close()
+            $successCount++
+            Write-LogMessage "Wake-on-LAN packet sent to: 255.255.255.255 (broadcast)" -Level Success
+        } catch {
+            $errorCount++
+            Write-LogMessage "Failed to send Wake-on-LAN packet to broadcast: $_" -Level Warning
+        }
+        
+        # Send to common class C subnet
+        try {
+            $UdpClient = New-Object System.Net.Sockets.UdpClient
+            $UdpClient.Connect("192.168.0.255", $port)
+            $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+            $UdpClient.Close()
+            $successCount++
+            Write-LogMessage "Wake-on-LAN packet sent to: 192.168.0.255" -Level Success
+        } catch {
+            $errorCount++
+            Write-LogMessage "Failed to send Wake-on-LAN packet to 192.168.0.255: $_" -Level Debug
+        }
+        
+        # Send to another common subnet
+        try {
+            $UdpClient = New-Object System.Net.Sockets.UdpClient
+            $UdpClient.Connect("192.168.1.255", $port)
+            $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+            $UdpClient.Close()
+            $successCount++
+            Write-LogMessage "Wake-on-LAN packet sent to: 192.168.1.255" -Level Success
+        } catch {
+            $errorCount++
+            Write-LogMessage "Failed to send Wake-on-LAN packet to 192.168.1.255: $_" -Level Debug
+        }
+        
+        # Send to another common home network
+        try {
+            $UdpClient = New-Object System.Net.Sockets.UdpClient
+            $UdpClient.Connect("10.0.0.255", $port)
+            $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+            $UdpClient.Close()
+            $successCount++
+            Write-LogMessage "Wake-on-LAN packet sent to: 10.0.0.255" -Level Success
+        } catch {
+            $errorCount++
+            Write-LogMessage "Failed to send Wake-on-LAN packet to 10.0.0.255: $_" -Level Debug
+        }
+        
+        # If we have a specific target IP in config, try that too
+        if ($script:config -and $script:config.wakeOnLan) {
+            # Check each defined computer in the wakeOnLan section
+            $config.wakeOnLan.PSObject.Properties | ForEach-Object {
+                $propName = $_.Name
+                $propValue = $_.Value
+                
+                # Skip non-object properties and specific reserved words
+                if ($propName -ne 'port' -and $propName -ne 'allowedRemoteAccess' -and $propValue -is [PSCustomObject]) {
+                    if ($propValue.ipAddress) {
+                        try {
+                            $targetIP = $propValue.ipAddress
+                            $UdpClient = New-Object System.Net.Sockets.UdpClient
+                            $UdpClient.Connect($targetIP, $port)
+                            $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+                            $UdpClient.Close()
+                            $successCount++
+                            Write-LogMessage "Wake-on-LAN packet sent to specific target: $targetIP ($propName)" -Level Success
+                        } catch {
+                            $errorCount++
+                            Write-LogMessage "Failed to send Wake-on-LAN packet to $targetIP: $_" -Level Warning
+                        }
+                    }
+                }
+            }
+        }
+        
+        # Try each local subnet based on active interfaces
+        try {
+            $interfaces = Get-NetIPConfiguration | Where-Object { $_.IPv4DefaultGateway -ne $null -and $_.NetAdapter.Status -eq "Up" }
+            foreach ($interface in $interfaces) {
+                try {
+                    $ipAddress = $interface.IPv4Address.IPAddress
+                    $prefixLength = $interface.IPv4Address.PrefixLength
+                    
+                    # Calculate subnet broadcast address
+                    $octets = $ipAddress.Split('.')
+                    $ipBytes = [byte[]]::new(4)
+                    for ($i = 0; $i -lt 4; $i++) {
+                        $ipBytes[$i] = [byte]$octets[$i]
+                    }
+                    
+                    # Calculate subnet mask from prefix length
+                    $maskBytes = [byte[]]::new(4)
+                    for ($i = 0; $i -lt 4; $i++) {
+                        $maskBytes[$i] = if ($i * 8 + 8 <= $prefixLength) { 255 } 
+                                        elseif ($i * 8 > $prefixLength) { 0 } 
+                                        else { 255 -band (255 -shl (8 - ($prefixLength % 8))) }
+                    }
+                    
+                    # Calculate broadcast address
+                    $broadcastBytes = [byte[]]::new(4)
+                    for ($i = 0; $i -lt 4; $i++) {
+                        $broadcastBytes[$i] = $ipBytes[$i] -bor (255 -band (-bnot $maskBytes[$i]))
+                    }
+                    
+                    $broadcastAddress = [string]::Join('.', $broadcastBytes)
+                    Write-LogMessage "Calculated broadcast address for interface $($interface.InterfaceAlias): $broadcastAddress" -Level Debug
+                    
+                    # Send to subnet broadcast
+                    $UdpClient = New-Object System.Net.Sockets.UdpClient
+                    $UdpClient.Connect($broadcastAddress, $port)
+                    $UdpClient.Send($MacByteArray, $MacByteArray.Length) | Out-Null
+                    $UdpClient.Close()
+                    $successCount++
+                    Write-LogMessage "Wake-on-LAN packet sent to subnet broadcast: $broadcastAddress" -Level Success
+                } catch {
+                    $errorCount++
+                    Write-LogMessage "Failed to send Wake-on-LAN packet to interface $($interface.InterfaceAlias): $_" -Level Debug
+                }
+            }
+        } catch {
+            Write-LogMessage "Error processing network interfaces: $_" -Level Warning
+        }
+        
+        if ($successCount -gt 0) {
+            Write-LogMessage "Successfully sent $successCount Wake-on-LAN packet(s) to $MACAddress" -Level Success
+            Write-LogMessage "IMPORTANT: Once packets are sent, it may take up to 30-45 seconds for the target PC to wake up." -Level Info
+            return $true
+        } else {
+            Write-LogMessage "Failed to send any Wake-on-LAN packets to $MACAddress" -Level Error
+            return $false
+        }
+    }
+    catch {
+        Write-LogMessage "Unexpected error in Send-WakePacket: $_" -Level Error
+        return $false
+    }
+} 

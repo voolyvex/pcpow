@@ -7,3 +7,5 @@ wake-targets.txt
 *.doc
 *.docx
 .cursor/
+pcpow.config.json
+!pcpow.config.template.json
