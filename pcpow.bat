@@ -18,7 +18,7 @@ echo.
 goto :help
 
 :sleep
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow.ps1" -Action Sleep %2 %3
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow-Launcher.ps1" -Action Sleep %2 %3
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%
@@ -27,7 +27,7 @@ if %EXIT_CODE% NEQ 0 (
 exit /b 0
 
 :restart
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow.ps1" -Action Restart %2 %3
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow-Launcher.ps1" -Action Restart %2 %3
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%
@@ -36,7 +36,7 @@ if %EXIT_CODE% NEQ 0 (
 exit /b 0
 
 :shutdown
-powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow.ps1" -Action Shutdown %2 %3
+powershell -ExecutionPolicy Bypass -NoProfile -File "%PCPOW_INSTALL_DIR%\PCPow-Launcher.ps1" -Action Shutdown %2 %3
 set EXIT_CODE=%errorlevel%
 if %EXIT_CODE% NEQ 0 (
     echo Operation cancelled or failed with code %EXIT_CODE%
